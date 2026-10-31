@@ -1,237 +1,225 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Lyrics</title>
 <style>
-* { margin: 0; padding: 0; box-sizing: border-box; }
-body { background: #000; color: #fff; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; display: flex; flex-direction: column; justify-content: center; align-items: center; min-height: 100vh; overflow: hidden; padding: 20px; text-align: center; }
-#login-btn { background: #fff; color: #000; border: none; padding: 12px 24px; font-size: 14px; font-weight: 600; cursor: pointer; border-radius: 4px; letter-spacing: 1px; text-transform: uppercase; }
-#login-btn:hover { background: #ccc; }
-#lyrics-container { display: none; width: 100%; max-width: 800px; height: 70vh; overflow: hidden; flex-direction: column; justify-content: center; align-items: center; position: relative; }
-.line { font-size: 2rem; font-weight: 700; color: #333; transition: color 0.15s ease, transform 0.15s ease; margin: 12px 0; line-height: 1.3; }
-.line.active { color: #fff; transform: scale(1.05); }
-#controls { display: none; position: fixed; bottom: 20px; gap: 10px; align-items: center; background: #0a0a0a; border: 1px solid #222; padding: 8px 16px; border-radius: 20px; font-size: 12px; color: #888; }
-#controls button { background: none; border: 1px solid #444; color: #fff; padding: 2px 8px; cursor: pointer; border-radius: 4px; font-size: 12px; }
-#controls button:hover { border-color: #fff; }
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{height:100%;background:#000;color:#fff;font-family:-apple-system,BlinkMacSystemFont,"Helvetica Neue",Helvetica,Arial,sans-serif;overflow:hidden}
+#login{position:fixed;inset:0;display:flex;align-items:center;justify-content:center}
+#login button{background:none;border:1px solid #fff;color:#fff;padding:14px 30px;font:inherit;font-size:13px;letter-spacing:.14em;text-transform:uppercase;cursor:pointer;transition:background .2s,color .2s}
+#login button:hover{background:#fff;color:#000}
+#lyrics{position:fixed;inset:0;overflow-y:auto;scrollbar-width:none;display:none}
+#lyrics::-webkit-scrollbar{display:none}
+#inner{padding:45vh 8vw;text-align:center}
+.line{font-size:clamp(24px,4.2vw,46px);font-weight:700;line-height:1.25;padding:.32em 0;min-height:1.2em;opacity:.18;transition:opacity .18s}
+.line.on{opacity:1}
+.plain .line{opacity:1;font-weight:500;padding:.1em 0}
+#adj{position:fixed;right:16px;bottom:12px;display:none;align-items:center;gap:10px;font-size:12px;opacity:.25;transition:opacity .2s;user-select:none}
+#adj:hover{opacity:1}
+#adj button{background:none;border:0;color:#fff;font:inherit;font-size:16px;cursor:pointer;padding:2px 6px}
+#adj span{min-width:64px;text-align:center;cursor:pointer}
 </style>
 </head>
 <body>
-
-<button id="login-btn">Connect Spotify</button>
-
-<div id="lyrics-container">
-  <div id="lyrics-content"></div>
-</div>
-
-<div id="controls">
-  <span>OFFSET: <span id="offset-val">0</span> ms</span>
-  <button id="dec-offset">-50ms</button>
-  <button id="inc-offset">+50ms</button>
-</div>
-
+<div id="login"><button id="go">Connect Spotify</button></div>
+<div id="lyrics"><div id="inner"></div></div>
+<div id="adj"><button id="m">−</button><span id="v">0 ms</span><button id="p">+</button></div>
 <script>
-const CLIENT_ID = 'c361237077b7462180c155eafff8aeda';
-const REDIRECT_URI = 'https://thisisthewebsite.github.io/';
-const SCOPES = 'user-read-currently-playing user-read-playback-state';
+const CID="c361237077b7462180c155eafff8aeda";
+const RURI="https://thisisthewebsite.github.io/";
+const STEP=50;
+const $=id=>document.getElementById(id);
+const ls=localStorage;
 
-let offsetMs = 0;
-let parsedLyrics = [];
-let currentTrackId = null;
-let pollInterval = null;
-let renderInterval = null;
-let currentProgressMs = 0;
-let lastFetchTime = 0;
-let isPlaying = false;
+const rnd=n=>{const a=new Uint8Array(n);crypto.getRandomValues(a);const c="abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";return Array.from(a,x=>c[x%62]).join("")};
+const b64=b=>btoa(String.fromCharCode(...new Uint8Array(b))).replace(/\+/g,"-").replace(/\//g,"_").replace(/=+$/,"");
 
-document.getElementById('login-btn').addEventListener('click', redirectToAuth);
-document.getElementById('inc-offset').addEventListener('click', () => adjustOffset(50));
-document.getElementById('dec-offset').addEventListener('click', () => adjustOffset(-50));
-
-function adjustOffset(delta) {
-  offsetMs += delta;
-  document.getElementById('offset-val').innerText = (offsetMs >= 0 ? '+' : '') + offsetMs;
+async function login(){
+const v=rnd(96);
+ls.setItem("v",v);
+const c=b64(await crypto.subtle.digest("SHA-256",new TextEncoder().encode(v)));
+location.href="https://accounts.spotify.com/authorize?"+new URLSearchParams({client_id:CID,response_type:"code",redirect_uri:RURI,scope:"user-read-currently-playing user-read-playback-state",code_challenge_method:"S256",code_challenge:c});
 }
 
-async function redirectToAuth() {
-  const verifier = generateCodeVerifier(128);
-  const challenge = await generateCodeChallenge(verifier);
-  localStorage.setItem("verifier", verifier);
-  const params = new URLSearchParams({
-    client_id: CLIENT_ID,
-    response_type: "code",
-    redirect_uri: REDIRECT_URI,
-    scope: SCOPES,
-    code_challenge_method: "S256",
-    code_challenge: challenge
-  });
-  document.location = `https://accounts.spotify.com/authorize?${params.toString()}`;
+async function tok(body){
+try{
+const r=await fetch("https://accounts.spotify.com/api/token",{method:"POST",headers:{"Content-Type":"application/x-www-form-urlencoded"},body:new URLSearchParams({client_id:CID,...body})});
+if(!r.ok)return false;
+const d=await r.json();
+ls.setItem("at",d.access_token);
+ls.setItem("exp",String(Date.now()+d.expires_in*1000-60000));
+if(d.refresh_token)ls.setItem("rt",d.refresh_token);
+return true;
+}catch(e){return false}
 }
 
-function generateCodeVerifier(length) {
-  let text = '';
-  let possible = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-._~';
-  for (let i = 0; i < length; i++) {
-    text += possible.charAt(Math.floor(Math.random() * possible.length));
-  }
-  return text;
+async function token(){
+if(Date.now()<+ls.getItem("exp"))return ls.getItem("at");
+const rt=ls.getItem("rt");
+if(rt&&await tok({grant_type:"refresh_token",refresh_token:rt}))return ls.getItem("at");
+return null;
 }
 
-async function generateCodeChallenge(codeVerifier) {
-  const data = new TextEncoder().encode(codeVerifier);
-  const digest = await window.crypto.subBuffer ? window.crypto.subBuffer : window.crypto.subtle.digest('SHA-256', data);
-  return btoa(String.fromCharCode.apply(null, new Uint8Array(digest)))
-    .replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+let id=null,lines=[],plain=false,pos0=0,t0=0,playing=false,active=-2,els=[],off=+ls.getItem("off")||0,running=false;
+
+const pos=()=>playing?pos0+performance.now()-t0:pos0;
+
+function setOff(n){
+off=n;
+ls.setItem("off",String(n));
+$("v").textContent=(n>0?"+":"")+n+" ms";
 }
 
-async function getAccessToken(code) {
-  const verifier = localStorage.getItem("verifier");
-  const params = new URLSearchParams({
-    client_id: CLIENT_ID,
-    grant_type: "authorization_code",
-    code,
-    redirect_uri: REDIRECT_URI,
-    code_verifier: verifier
-  });
-  const result = await fetch("https://accounts.spotify.com/api/token", {
-    method: "POST",
-    headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    body: params
-  });
-  const { access_token, refresh_token } = await result.json();
-  localStorage.setItem("access_token", access_token);
-  if (refresh_token) localStorage.setItem("refresh_token", refresh_token);
-  return access_token;
+function parse(s){
+const o=[];
+s.split("\n").forEach(l=>{
+const m=[...l.matchAll(/\[(\d+):(\d+(?:\.\d+)?)\]/g)];
+const t=l.replace(/\[[^\]]*\]/g,"").trim();
+m.forEach(x=>o.push({t:(+x[1]*60+ +x[2])*1000,s:t}));
+});
+return o.sort((a,b)=>a.t-b.t);
 }
 
-async function init() {
-  const urlParams = new URLSearchParams(window.location.search);
-  const code = urlParams.get('code');
-  let token = localStorage.getItem('access_token');
-
-  if (code) {
-    token = await getAccessToken(code);
-    window.history.replaceState({}, document.title, "/");
-  }
-
-  if (token) {
-    document.getElementById('login-btn').style.display = 'none';
-    document.getElementById('lyrics-container').style.display = 'flex';
-    document.getElementById('controls').style.display = 'flex';
-    startSync(token);
-  }
+function render(a){
+$("inner").innerHTML="";
+$("lyrics").classList.toggle("plain",plain);
+els=a.map(x=>{const d=document.createElement("div");d.className="line";d.textContent=x.s;$("inner").appendChild(d);return d});
+active=-2;
+$("lyrics").scrollTop=0;
 }
 
-function startSync(token) {
-  pollInterval = setInterval(() => checkSpotifyPlayback(token), 1000);
-  checkSpotifyPlayback(token);
-  renderInterval = setInterval(updateLyricsDisplay, 30);
+async function getJSON(u){
+try{const r=await fetch(u);if(r.ok)return await r.json()}catch(e){}
+return null;
 }
 
-async function checkSpotifyPlayback(token) {
-  try {
-    const res = await fetch('https://api.spotify.com/v1/me/player/currently-playing', {
-      headers: { Authorization: `Bearer ${token}` }
-    });
-    if (res.status === 204 || res.status > 400) return;
-    const data = await res.json();
-    if (!data || !data.item) return;
-
-    isPlaying = data.is_playing;
-    currentProgressMs = data.progress_ms;
-    lastFetchTime = performance.now();
-
-    if (data.item.id !== currentTrackId) {
-      currentTrackId = data.item.id;
-      fetchLyrics(data.item.name, data.item.artists[0].name, data.item.duration_ms / 1000);
-    }
-  } catch (e) {}
+async function fetchLyrics(it){
+const dur=it.duration_ms/1000;
+const artist=it.artists[0].name;
+let j=await getJSON("https://lrclib.net/api/get?"+new URLSearchParams({track_name:it.name,artist_name:artist,album_name:it.album.name,duration:Math.round(dur)}));
+if(j&&j.syncedLyrics&&Math.abs((j.duration||dur)-dur)<=3)return j;
+const all=[];
+const s1=await getJSON("https://lrclib.net/api/search?"+new URLSearchParams({track_name:it.name,artist_name:artist}));
+if(s1)all.push(...s1);
+const s2=await getJSON("https://lrclib.net/api/search?"+new URLSearchParams({q:it.name+" "+artist}));
+if(s2)all.push(...s2);
+const best=all.filter(x=>x.syncedLyrics&&Math.abs(x.duration-dur)<=3).sort((a,b)=>Math.abs(a.duration-dur)-Math.abs(b.duration-dur))[0];
+if(best)return best;
+if(j&&(j.syncedLyrics||j.plainLyrics))return j;
+return all.find(x=>x.plainLyrics)||null;
 }
 
-async function fetchLyrics(trackName, artistName, durationSec) {
-  const content = document.getElementById('lyrics-content');
-  content.innerHTML = '<div class="line active">...</div>';
-  parsedLyrics = [];
-
-  try {
-    const query = new URLSearchParams({
-      track_name: trackName,
-      artist_name: artistName,
-      duration: Math.round(durationSec)
-    });
-    const res = await fetch(`https://lrclib.net/api/get?${query.toString()}`);
-    if (!res.ok) throw new Error();
-    const data = await res.json();
-
-    if (data.syncedLyrics) {
-      parseLrc(data.syncedLyrics);
-    } else if (data.plainLyrics) {
-      content.innerHTML = `<div class="line active">${data.plainLyrics.replace(/\n/g, '<br>')}</div>`;
-    } else {
-      content.innerHTML = '<div class="line active">No lyrics found</div>';
-    }
-  } catch (e) {
-    content.innerHTML = '<div class="line active">No lyrics found</div>';
-  }
+async function load(it){
+const mine=it.id;
+lines=[];plain=false;render([]);
+const j=await fetchLyrics(it);
+if(id!==mine)return;
+if(j&&j.syncedLyrics){
+lines=parse(j.syncedLyrics);
+plain=false;
+}else if(j&&j.plainLyrics){
+lines=j.plainLyrics.split("\n").map(s=>({t:0,s:s.trim()}));
+plain=true;
+}
+render(lines);
 }
 
-function parseLrc(lrcText) {
-  const lines = lrcText.split('\n');
-  parsedLyrics = [];
-  const regex = /\[(\d{2}):(\d{2})\.(\d{2,3})\](.*)/;
-
-  lines.forEach(line => {
-    const match = line.match(regex);
-    if (match) {
-      const min = parseInt(match[1]);
-      const sec = parseInt(match[2]);
-      const msStr = match[3].padEnd(3, '0');
-      const ms = parseInt(msStr);
-      const time = (min * 60 * 1000) + (sec * 1000) + ms;
-      const text = match[4].trim();
-      if (text) parsedLyrics.push({ time, text });
-    }
-  });
-
-  const content = document.getElementById('lyrics-content');
-  content.innerHTML = parsedLyrics.map((l, i) => `<div class="line" id="line-${i}">${l.text}</div>`).join('');
+async function poll(){
+const t=await token();
+if(!t){running=false;$("lyrics").style.display="none";$("adj").style.display="none";$("login").style.display="flex";return}
+const s=performance.now();
+let r;
+try{r=await fetch("https://api.spotify.com/v1/me/player/currently-playing",{headers:{Authorization:"Bearer "+t}})}catch(e){return}
+const e=performance.now();
+if(r.status===401){ls.setItem("exp","0");return}
+if(r.status!==200){
+playing=false;
+if(id){id=null;lines=[];render([])}
+return;
+}
+let d;
+try{d=await r.json()}catch(x){return}
+if(!d||!d.item||d.currently_playing_type!=="track"){
+playing=false;
+if(id){id=null;lines=[];render([])}
+return;
+}
+const mid=(s+e)/2;
+const cur=pos0+(mid-t0);
+const wasPlaying=playing;
+playing=d.is_playing;
+if(d.item.id!==id){
+id=d.item.id;
+pos0=d.progress_ms;t0=mid;
+load(d.item);
+}else if(wasPlaying&&playing&&Math.abs(cur-d.progress_ms)<400){
+pos0=cur+(d.progress_ms-cur)*.35;t0=mid;
+}else{
+pos0=d.progress_ms;t0=mid;
+}
 }
 
-function updateLyricsDisplay() {
-  if (!parsedLyrics.length) return;
-
-  let now = currentProgressMs;
-  if (isPlaying) {
-    now += (performance.now() - lastFetchTime);
-  }
-  now += offsetMs;
-
-  let activeIdx = -1;
-  for (let i = 0; i < parsedLyrics.length; i++) {
-    if (now >= parsedLyrics[i].time) {
-      activeIdx = i;
-    } else {
-      break;
-    }
-  }
-
-  parsedLyrics.forEach((_, i) => {
-    const el = document.getElementById(`line-${i}`);
-    if (el) {
-      if (i === activeIdx) {
-        if (!el.classList.contains('active')) {
-          el.classList.add('active');
-          el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-        }
-      } else {
-        el.classList.remove('active');
-      }
-    }
-  });
+async function loop(){
+while(running){
+await poll();
+await new Promise(r=>setTimeout(r,1500));
+}
 }
 
-init();
+function frame(){
+if(running&&!plain&&lines.length){
+const p=pos()+off;
+let lo=0,hi=lines.length-1,i=-1;
+while(lo<=hi){
+const m=(lo+hi)>>1;
+if(lines[m].t<=p){i=m;lo=m+1}else hi=m-1;
+}
+if(i!==active){
+if(els[active])els[active].classList.remove("on");
+active=i;
+if(els[i]){
+els[i].classList.add("on");
+if(lines[i].s){
+const box=$("lyrics");
+box.scrollTo({top:els[i].offsetTop-box.clientHeight/2+els[i].offsetHeight/2,behavior:"smooth"});
+}
+}else{
+$("lyrics").scrollTo({top:0,behavior:"smooth"});
+}
+}
+}
+requestAnimationFrame(frame);
+}
+
+function start(){
+$("login").style.display="none";
+$("lyrics").style.display="block";
+$("adj").style.display="flex";
+setOff(off);
+running=true;
+loop();
+}
+
+$("go").onclick=login;
+$("m").onclick=()=>setOff(off-STEP);
+$("p").onclick=()=>setOff(off+STEP);
+$("v").onclick=()=>setOff(0);
+document.addEventListener("keydown",e=>{
+if(e.key==="ArrowLeft")setOff(off-STEP);
+if(e.key==="ArrowRight")setOff(off+STEP);
+});
+
+(async()=>{
+const code=new URLSearchParams(location.search).get("code");
+if(code){
+await tok({grant_type:"authorization_code",code,redirect_uri:RURI,code_verifier:ls.getItem("v")});
+history.replaceState({},"",RURI);
+}
+requestAnimationFrame(frame);
+if(await token())start();
+})();
 </script>
 </body>
 </html>
