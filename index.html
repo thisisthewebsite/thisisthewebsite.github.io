@@ -2,223 +2,299 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>Lyrics</title>
 <style>
-*{margin:0;padding:0;box-sizing:border-box}
-html,body{height:100%;background:#000;color:#fff;font-family:-apple-system,BlinkMacSystemFont,"Helvetica Neue",Helvetica,Arial,sans-serif;overflow:hidden}
-#login{position:fixed;inset:0;display:flex;align-items:center;justify-content:center}
-#login button{background:none;border:1px solid #fff;color:#fff;padding:14px 30px;font:inherit;font-size:13px;letter-spacing:.14em;text-transform:uppercase;cursor:pointer;transition:background .2s,color .2s}
-#login button:hover{background:#fff;color:#000}
-#lyrics{position:fixed;inset:0;overflow-y:auto;scrollbar-width:none;display:none}
-#lyrics::-webkit-scrollbar{display:none}
-#inner{padding:45vh 8vw;text-align:center}
-.line{font-size:clamp(24px,4.2vw,46px);font-weight:700;line-height:1.25;padding:.32em 0;min-height:1.2em;opacity:.18;transition:opacity .18s}
-.line.on{opacity:1}
-.plain .line{opacity:1;font-weight:500;padding:.1em 0}
-#adj{position:fixed;right:16px;bottom:12px;display:none;align-items:center;gap:10px;font-size:12px;opacity:.25;transition:opacity .2s;user-select:none}
-#adj:hover{opacity:1}
-#adj button{background:none;border:0;color:#fff;font:inherit;font-size:16px;cursor:pointer;padding:2px 6px}
-#adj span{min-width:64px;text-align:center;cursor:pointer}
+*{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{height:100%;background:#000;color:#fff;overflow:hidden;font-family:-apple-system,BlinkMacSystemFont,"SF Pro Display","Inter","Helvetica Neue",Arial,sans-serif;-webkit-font-smoothing:antialiased}
+#c,#m{position:fixed;inset:0;display:none;align-items:center;justify-content:center}
+#b{background:none;color:#fff;border:1px solid rgba(255,255,255,.9);padding:16px 34px;font:600 12px inherit;font-family:inherit;letter-spacing:.24em;text-transform:uppercase;cursor:pointer;border-radius:100px;transition:background .5s cubic-bezier(.16,1,.3,1),color .5s cubic-bezier(.16,1,.3,1),transform .5s cubic-bezier(.16,1,.3,1)}
+#b:hover{background:#fff;color:#000}
+#b:active{transform:scale(.96)}
+#m{font-size:11px;letter-spacing:.28em;text-transform:uppercase;opacity:.35}
+#l{position:fixed;inset:0;display:none;overflow:hidden;opacity:0;transition:opacity .8s ease;-webkit-mask-image:linear-gradient(transparent 0,#000 13%,#000 78%,transparent 100%);mask-image:linear-gradient(transparent 0,#000 13%,#000 78%,transparent 100%)}
+#w{position:relative}
+.r{position:absolute;top:0;left:max(24px,7vw);width:min(1000px,calc(100% - max(48px,14vw)));padding-bottom:.42em;font-size:clamp(32px,5.6vw,68px);font-weight:700;line-height:1.12;letter-spacing:-.028em;transform-origin:0 50%;opacity:0;will-change:transform,opacity,filter;text-wrap:pretty;transition:transform 1.05s cubic-bezier(.16,1,.3,1),opacity .8s ease,filter .8s ease,text-shadow .8s ease}
+.r.a{text-shadow:0 0 52px rgba(255,255,255,.3)}
+.n .r{transition:none!important}
+.r.e i{display:inline-block;width:.3em;height:.3em;margin-right:.26em;border-radius:50%;background:#fff;opacity:.5;transform:scale(.7)}
+.r.e.a i{animation:d 1.5s infinite ease-in-out}
+.r.e i:nth-child(2){animation-delay:.18s}
+.r.e i:nth-child(3){animation-delay:.36s}
+@keyframes d{0%,80%,100%{transform:scale(.6);opacity:.3}40%{transform:scale(1);opacity:1}}
+#l.p{overflow-y:auto;scrollbar-width:none}
+#l.p::-webkit-scrollbar{display:none}
+#l.p #w{padding:26vh 0 40vh}
+#l.p .r{position:relative;left:auto;margin:0 auto;transform:none!important;opacity:.92!important;filter:none!important;padding-bottom:.12em;text-shadow:none}
+#l.p .r.e{height:.8em}
+#l.p .r.e i{display:none}
+#o{position:fixed;left:50%;bottom:max(22px,env(safe-area-inset-bottom));transform:translateX(-50%) translateY(8px);display:none;align-items:center;gap:14px;opacity:0;pointer-events:none;transition:opacity .6s ease,transform .6s cubic-bezier(.16,1,.3,1)}
+.v #o{opacity:1;pointer-events:auto;transform:translateX(-50%)}
+#o button{width:34px;height:34px;border-radius:50%;background:none;border:1px solid rgba(255,255,255,.35);color:#fff;font-size:17px;line-height:1;cursor:pointer;transition:background .3s ease,color .3s ease,transform .3s ease}
+#o button:hover{background:#fff;color:#000}
+#o button:active{transform:scale(.9)}
+#ov{min-width:84px;text-align:center;font-size:11px;letter-spacing:.18em;font-variant-numeric:tabular-nums;opacity:.7;cursor:pointer;user-select:none}
 </style>
 </head>
 <body>
-<div id="login"><button id="go">Connect Spotify</button></div>
-<div id="lyrics"><div id="inner"></div></div>
-<div id="adj"><button id="m">−</button><span id="v">0 ms</span><button id="p">+</button></div>
+<div id="c"><button id="b">Connect Spotify</button></div>
+<div id="l"><div id="w"></div></div>
+<div id="m"></div>
+<div id="o"><button id="dn" aria-label="Earlier">−</button><span id="ov">0 ms</span><button id="up" aria-label="Later">+</button></div>
 <script>
-const CID="c361237077b7462180c155eafff8aeda";
-const RURI="https://thisisthewebsite.github.io/";
-const STEP=50;
-const $=id=>document.getElementById(id);
+const CID='c361237077b7462180c155eafff8aeda';
+const RU='https://thisisthewebsite.github.io/';
+const SC='user-read-currently-playing user-read-playback-state';
+const API='https://api.spotify.com/v1/me/player/currently-playing?additional_types=episode';
+const TK='https://accounts.spotify.com/api/token';
+const LR='https://lrclib.net/api/';
+const $=s=>document.querySelector(s);
+const cE=$('#c'),lE=$('#l'),wE=$('#w'),mE=$('#m'),oE=$('#o'),vE=$('#ov');
 const ls=localStorage;
+let off=parseInt(ls.getItem('off'))||0;
+let S=null;
+try{S=JSON.parse(ls.getItem('tk')||'null')}catch(e){}
+let els=[],times=[],ys=[],idx=-2,mode=0,cur=null,tid=0,wt=0;
+const base={p:0,t:0,on:false};
 
-const rnd=n=>{const a=new Uint8Array(n);crypto.getRandomValues(a);const c="abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";return Array.from(a,x=>c[x%62]).join("")};
-const b64=b=>btoa(String.fromCharCode(...new Uint8Array(b))).replace(/\+/g,"-").replace(/\//g,"_").replace(/=+$/,"");
+const b64u=b=>btoa(String.fromCharCode(...new Uint8Array(b))).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');
 
-async function login(){
-const v=rnd(96);
-ls.setItem("v",v);
-const c=b64(await crypto.subtle.digest("SHA-256",new TextEncoder().encode(v)));
-location.href="https://accounts.spotify.com/authorize?"+new URLSearchParams({client_id:CID,response_type:"code",redirect_uri:RURI,scope:"user-read-currently-playing user-read-playback-state",code_challenge_method:"S256",code_challenge:c});
+async function connect(){
+const v=b64u(crypto.getRandomValues(new Uint8Array(64)));
+const h=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(v));
+ls.setItem('sv',v);
+location.href='https://accounts.spotify.com/authorize?'+new URLSearchParams({client_id:CID,response_type:'code',redirect_uri:RU,code_challenge_method:'S256',code_challenge:b64u(h),scope:SC});
 }
 
-async function tok(body){
+function save(j){
+S={a:j.access_token,r:j.refresh_token||(S&&S.r),e:Date.now()+j.expires_in*1000-60000};
+ls.setItem('tk',JSON.stringify(S));
+}
+
+async function exchange(c){
 try{
-const r=await fetch("https://accounts.spotify.com/api/token",{method:"POST",headers:{"Content-Type":"application/x-www-form-urlencoded"},body:new URLSearchParams({client_id:CID,...body})});
-if(!r.ok)return false;
-const d=await r.json();
-ls.setItem("at",d.access_token);
-ls.setItem("exp",String(Date.now()+d.expires_in*1000-60000));
-if(d.refresh_token)ls.setItem("rt",d.refresh_token);
-return true;
-}catch(e){return false}
+const r=await fetch(TK,{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:new URLSearchParams({grant_type:'authorization_code',code:c,redirect_uri:RU,client_id:CID,code_verifier:ls.getItem('sv')||''})});
+if(r.ok)save(await r.json());
+}catch(e){}
 }
 
-async function token(){
-if(Date.now()<+ls.getItem("exp"))return ls.getItem("at");
-const rt=ls.getItem("rt");
-if(rt&&await tok({grant_type:"refresh_token",refresh_token:rt}))return ls.getItem("at");
-return null;
+async function refresh(){
+try{
+const r=await fetch(TK,{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:new URLSearchParams({grant_type:'refresh_token',refresh_token:S.r,client_id:CID})});
+if(r.ok){save(await r.json());return}
+if(r.status===400||r.status===401){S=null;ls.removeItem('tk')}
+}catch(e){}
 }
 
-let id=null,lines=[],plain=false,pos0=0,t0=0,playing=false,active=-2,els=[],off=+ls.getItem("off")||0,running=false;
+async function tok(){
+if(!S)return null;
+if(Date.now()>S.e)await refresh();
+return S?S.a:null;
+}
 
-const pos=()=>playing?pos0+performance.now()-t0:pos0;
+function setView(v,t){
+cE.style.display=v==='c'?'flex':'none';
+lE.style.display=v==='l'?'block':'none';
+oE.style.display=v==='l'?'flex':'none';
+mE.style.display=v==='m'?'flex':'none';
+if(v==='m')mE.textContent=t||'';
+}
 
-function setOff(n){
-off=n;
-ls.setItem("off",String(n));
-$("v").textContent=(n>0?"+":"")+n+" ms";
+function clearTrack(){
+if(cur===null)return;
+cur=null;tid++;mode=0;els=[];times=[];wE.innerHTML='';
+}
+
+async function poll(){
+let d=1000;
+try{
+const t=await tok();
+if(!t){setView('c');return}
+const t0=performance.now();
+const r=await fetch(API,{headers:{Authorization:'Bearer '+t}});
+const t1=performance.now();
+if(r.status===401){S.e=0;d=150}
+else if(r.status===429){d=(+r.headers.get('Retry-After')||3)*1000}
+else if(r.status===204){base.on=false;clearTrack();setView('m','Nothing playing')}
+else if(r.ok){sync(await r.json(),t0,t1)}
+else d=2500;
+}catch(e){d=2000}
+setTimeout(poll,d);
+}
+
+function sync(j,t0,t1){
+const it=j.item;
+if(!it||j.currently_playing_type!=='track'){base.on=false;clearTrack();setView('m','Nothing playing');return}
+const now=performance.now();
+const nowP=j.is_playing?j.progress_ms+(t1-t0)/2+(now-t1):j.progress_ms;
+if(cur!==it.id){
+cur=it.id;
+base.p=nowP;base.t=now;base.on=j.is_playing;
+load(it);
+return;
+}
+const pr=base.on?base.p+(now-base.t):base.p;
+const df=nowP-pr;
+if(!j.is_playing||base.on!==j.is_playing||Math.abs(df)>300){base.p=nowP;base.t=now}
+else{base.p=pr+df*.2;base.t=now}
+base.on=j.is_playing;
+}
+
+const g=async u=>{try{const r=await fetch(LR+u);return r.ok?await r.json():null}catch(e){return null}};
+const q=o=>new URLSearchParams(o).toString();
+const nm=s=>(s||'').toLowerCase().replace(/[^a-z0-9]/g,'');
+const cl=s=>s.replace(/\s*[\(\[][^)\]]*(feat|ft\.|with|remaster|version|live|edit|mix|deluxe|bonus|mono|stereo|radio)[^)\]]*[\)\]]/gi,'').replace(/\s+-\s+.*(remaster|version|live|edit|mix|mono|stereo|radio).*$/i,'').trim();
+
+async function find(tr,ar,al,du){
+const c=cl(tr);
+const rs=await Promise.all([
+g('get?'+q({track_name:tr,artist_name:ar.join(', '),album_name:al,duration:du})),
+g('get?'+q({track_name:tr,artist_name:ar[0],album_name:al,duration:du})),
+g('get?'+q({track_name:c,artist_name:ar[0],album_name:al,duration:du})),
+g('search?'+q({track_name:c,artist_name:ar[0]})),
+g('search?'+q({q:c+' '+ar[0]})),
+g('search?'+q({q:c+' '+ar.join(' ')}))
+]);
+let pool=[];
+rs.forEach((r,i)=>{
+if(!r)return;
+if(i<3)pool.push(r);
+else pool=pool.concat(r.filter(x=>ar.some(a=>nm(x.artistName).includes(nm(a))||nm(a).includes(nm(x.artistName)))));
+});
+pool=pool.filter(x=>x&&!x.instrumental&&(x.syncedLyrics||x.plainLyrics));
+const seen=new Set();
+pool=pool.filter(x=>{if(seen.has(x.id))return false;seen.add(x.id);return true});
+const sc=x=>{
+const df=Math.abs((x.duration||du)-du);
+const nmatch=nm(x.trackName)===nm(tr)||nm(x.trackName)===nm(c)?0:1;
+return [x.syncedLyrics?0:1,df<=3?0:df<=5?1:2,nmatch,df];
+};
+pool.sort((a,b)=>{
+const x=sc(a),y=sc(b);
+for(let i=0;i<4;i++)if(x[i]!==y[i])return x[i]-y[i];
+return 0;
+});
+const best=pool.find(x=>Math.abs((x.duration||du)-du)<=5);
+return best||null;
 }
 
 function parse(s){
 const o=[];
-s.split("\n").forEach(l=>{
-const m=[...l.matchAll(/\[(\d+):(\d+(?:\.\d+)?)\]/g)];
-const t=l.replace(/\[[^\]]*\]/g,"").trim();
-m.forEach(x=>o.push({t:(+x[1]*60+ +x[2])*1000,s:t}));
-});
-return o.sort((a,b)=>a.t-b.t);
+for(const ln of s.split(/\r?\n/)){
+const ts=[...ln.matchAll(/\[(\d+):(\d+(?:[.:]\d+)?)\]/g)];
+if(!ts.length)continue;
+const tx=ln.replace(/^(\s*\[\d+:\d+(?:[.:]\d+)?\])+/,'').replace(/<[^>]*>/g,'').replace(/\s+/g,' ').trim();
+for(const m of ts)o.push([Math.round(parseFloat(m[1])*60000+parseFloat(m[2].replace(':','.'))*1000),tx]);
 }
-
-function render(a){
-$("inner").innerHTML="";
-$("lyrics").classList.toggle("plain",plain);
-els=a.map(x=>{const d=document.createElement("div");d.className="line";d.textContent=x.s;$("inner").appendChild(d);return d});
-active=-2;
-$("lyrics").scrollTop=0;
-}
-
-async function getJSON(u){
-try{const r=await fetch(u);if(r.ok)return await r.json()}catch(e){}
-return null;
-}
-
-async function fetchLyrics(it){
-const dur=it.duration_ms/1000;
-const artist=it.artists[0].name;
-let j=await getJSON("https://lrclib.net/api/get?"+new URLSearchParams({track_name:it.name,artist_name:artist,album_name:it.album.name,duration:Math.round(dur)}));
-if(j&&j.syncedLyrics&&Math.abs((j.duration||dur)-dur)<=3)return j;
-const all=[];
-const s1=await getJSON("https://lrclib.net/api/search?"+new URLSearchParams({track_name:it.name,artist_name:artist}));
-if(s1)all.push(...s1);
-const s2=await getJSON("https://lrclib.net/api/search?"+new URLSearchParams({q:it.name+" "+artist}));
-if(s2)all.push(...s2);
-const best=all.filter(x=>x.syncedLyrics&&Math.abs(x.duration-dur)<=3).sort((a,b)=>Math.abs(a.duration-dur)-Math.abs(b.duration-dur))[0];
-if(best)return best;
-if(j&&(j.syncedLyrics||j.plainLyrics))return j;
-return all.find(x=>x.plainLyrics)||null;
+o.sort((a,b)=>a[0]-b[0]);
+return o.filter((x,i)=>!(x[1]===''&&i>0&&o[i-1][1]===''));
 }
 
 async function load(it){
-const mine=it.id;
-lines=[];plain=false;render([]);
-const j=await fetchLyrics(it);
-if(id!==mine)return;
-if(j&&j.syncedLyrics){
-lines=parse(j.syncedLyrics);
-plain=false;
-}else if(j&&j.plainLyrics){
-lines=j.plainLyrics.split("\n").map(s=>({t:0,s:s.trim()}));
-plain=true;
-}
-render(lines);
+const id=++tid;
+lE.style.opacity=0;
+wE.innerHTML='';els=[];times=[];mode=0;idx=-2;
+setView('l');
+const res=await find(it.name,it.artists.map(a=>a.name),it.album.name,Math.round(it.duration_ms/1000));
+if(id!==tid)return;
+build(res);
 }
 
-async function poll(){
-const t=await token();
-if(!t){running=false;$("lyrics").style.display="none";$("adj").style.display="none";$("login").style.display="flex";return}
-const s=performance.now();
-let r;
-try{r=await fetch("https://api.spotify.com/v1/me/player/currently-playing",{headers:{Authorization:"Bearer "+t}})}catch(e){return}
-const e=performance.now();
-if(r.status===401){ls.setItem("exp","0");return}
-if(r.status!==200){
-playing=false;
-if(id){id=null;lines=[];render([])}
-return;
+function measure(){
+let y=0;ys=[];
+for(const e of els){ys.push(y);y+=e.offsetHeight}
 }
-let d;
-try{d=await r.json()}catch(x){return}
-if(!d||!d.item||d.currently_playing_type!=="track"){
-playing=false;
-if(id){id=null;lines=[];render([])}
-return;
-}
-const mid=(s+e)/2;
-const cur=pos0+(mid-t0);
-const wasPlaying=playing;
-playing=d.is_playing;
-if(d.item.id!==id){
-id=d.item.id;
-pos0=d.progress_ms;t0=mid;
-load(d.item);
-}else if(wasPlaying&&playing&&Math.abs(cur-d.progress_ms)<400){
-pos0=cur+(d.progress_ms-cur)*.35;t0=mid;
-}else{
-pos0=d.progress_ms;t0=mid;
+
+function upd(){
+const a=Math.max(idx,0);
+const an=innerHeight*.33;
+for(let i=0;i<els.length;i++){
+const d=i-idx,ad=Math.abs(d),e=els[i],act=d===0;
+e.style.transform='translate3d(0,'+(an+ys[i]-ys[a])+'px,0) scale('+(act?1:.84)+')';
+e.style.opacity=ad>7?0:act?1:Math.max(.1,.44-ad*.06);
+e.style.filter=act?'none':'blur('+Math.min(ad*.9,5)+'px)';
+e.style.transitionDelay=d>0?Math.min(d*45,270)+'ms':'0ms';
+e.classList.toggle('a',act);
 }
 }
 
-async function loop(){
-while(running){
-await poll();
-await new Promise(r=>setTimeout(r,1500));
+function build(r){
+wE.innerHTML='';els=[];times=[];idx=-2;
+if(!r){setView('m','No lyrics');return}
+let arr;
+if(r.syncedLyrics){mode=1;arr=parse(r.syncedLyrics)}
+else{mode=2;arr=r.plainLyrics.split(/\r?\n/).map(x=>[0,x.trim()]).filter((x,i,o)=>!(x[1]===''&&i>0&&o[i-1][1]===''))}
+if(!arr.length){setView('m','No lyrics');return}
+lE.classList.toggle('p',mode===2);
+const f=document.createDocumentFragment();
+for(const [t,x] of arr){
+const e=document.createElement('div');
+e.className='r';
+if(x)e.textContent=x;
+else{e.classList.add('e');e.innerHTML='<i></i><i></i><i></i>'}
+f.appendChild(e);els.push(e);times.push(t);
 }
+wE.appendChild(f);
+setView('l');
+lE.scrollTop=0;
+if(mode===1){
+measure();
+wE.classList.add('n');
+upd();
+void wE.offsetWidth;
+wE.classList.remove('n');
 }
-
-function frame(){
-if(running&&!plain&&lines.length){
-const p=pos()+off;
-let lo=0,hi=lines.length-1,i=-1;
-while(lo<=hi){
-const m=(lo+hi)>>1;
-if(lines[m].t<=p){i=m;lo=m+1}else hi=m-1;
-}
-if(i!==active){
-if(els[active])els[active].classList.remove("on");
-active=i;
-if(els[i]){
-els[i].classList.add("on");
-if(lines[i].s){
-const box=$("lyrics");
-box.scrollTo({top:els[i].offsetTop-box.clientHeight/2+els[i].offsetHeight/2,behavior:"smooth"});
-}
-}else{
-$("lyrics").scrollTo({top:0,behavior:"smooth"});
-}
-}
-}
-requestAnimationFrame(frame);
+requestAnimationFrame(()=>{lE.style.opacity=1});
 }
 
-function start(){
-$("login").style.display="none";
-$("lyrics").style.display="block";
-$("adj").style.display="flex";
-setOff(off);
-running=true;
-loop();
+function tick(){
+if(mode===1&&els.length){
+const p=(base.on?base.p+performance.now()-base.t:base.p)+off;
+let lo=0,hi=times.length-1,r=-1;
+while(lo<=hi){const m=(lo+hi)>>1;if(times[m]<=p){r=m;lo=m+1}else hi=m-1}
+if(r!==idx){idx=r;upd()}
+}
+requestAnimationFrame(tick);
 }
 
-$("go").onclick=login;
-$("m").onclick=()=>setOff(off-STEP);
-$("p").onclick=()=>setOff(off+STEP);
-$("v").onclick=()=>setOff(0);
-document.addEventListener("keydown",e=>{
-if(e.key==="ArrowLeft")setOff(off-STEP);
-if(e.key==="ArrowRight")setOff(off+STEP);
+function setOff(v){
+off=Math.max(-5000,Math.min(5000,v));
+ls.setItem('off',off);
+vE.textContent=(off>0?'+':'')+off+' ms';
+}
+
+function wake(){
+document.body.classList.add('v');
+clearTimeout(wt);
+wt=setTimeout(()=>document.body.classList.remove('v'),2600);
+}
+
+$('#b').addEventListener('click',connect);
+$('#dn').addEventListener('click',()=>{setOff(off-25);wake()});
+$('#up').addEventListener('click',()=>{setOff(off+25);wake()});
+vE.addEventListener('click',()=>{setOff(0);wake()});
+['mousemove','touchstart','pointerdown'].forEach(n=>addEventListener(n,wake,{passive:true}));
+addEventListener('keydown',e=>{
+if(e.key==='ArrowLeft'){setOff(off-25);wake()}
+if(e.key==='ArrowRight'){setOff(off+25);wake()}
+});
+addEventListener('resize',()=>{
+if(mode===1&&els.length){
+measure();
+wE.classList.add('n');
+upd();
+void wE.offsetWidth;
+wE.classList.remove('n');
+}
 });
 
+setOff(off);
 (async()=>{
-const code=new URLSearchParams(location.search).get("code");
-if(code){
-await tok({grant_type:"authorization_code",code,redirect_uri:RURI,code_verifier:ls.getItem("v")});
-history.replaceState({},"",RURI);
-}
-requestAnimationFrame(frame);
-if(await token())start();
+const p=new URLSearchParams(location.search);
+if(p.get('code')){await exchange(p.get('code'));history.replaceState({},'',location.pathname)}
+else if(p.get('error'))history.replaceState({},'',location.pathname);
+if(S){setView('m','');poll()}else setView('c');
+requestAnimationFrame(tick);
 })();
 </script>
 </body>
