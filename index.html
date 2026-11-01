@@ -80,7 +80,6 @@ const CID='c361237077b7462180c155eafff8aeda';
 const RURI=location.origin+location.pathname;
 const SCOPE='user-read-playback-state user-read-currently-playing';
 const API='https://api.spotify.com/v1/me/player/currently-playing?additional_types=episode';
-const LB='https://lrclib.net/api/';
 const LS=localStorage;
 const $=s=>document.querySelector(s);
 const cEl=$('#c'),app=$('#app'),lyr=$('.lyr'),track=$('.track'),art=$('.art'),img=$('.art img'),meta=$('.meta'),tt=$('#tt'),ta=$('#ta'),ov=$('#ov'),bgs=[$('#b0'),$('#b1')];
@@ -194,7 +193,7 @@ lyr.classList.remove('plain');
 if(it.type&&it.type!=='track')return;
 const c=cache.get(id);
 if(c!==undefined){show(c);return}
-const t={name:it.name,artist:names[0]||'',album:it.album?it.album.name:'',dur:it.duration_ms};
+const t={name:it.name,artist:names[0]||'',album:it.album?it.album.name:'',dur:it.duration_ms,isrc:(it.external_ids&&it.external_ids.isrc)||''};
 ctl=new AbortController();
 getLyrics(t,ctl.signal).then(r=>{
 if(r===undefined)return;
@@ -205,12 +204,36 @@ if(id===cur)show(r);
 }
 
 const clean=s=>s.replace(/\s*[\(\[][^\)\]]*[\)\]]/g,'').replace(/\s+[-–—]\s+.*$/,'').trim()||s;
+const T=(p,ms)=>Promise.race([p,new Promise(r=>setTimeout(()=>r(null),ms))]);
+const Q=o=>new URLSearchParams(o).toString();
+const J=(u,sg)=>fetch(u,{signal:sg}).then(r=>r.ok?r.json():null).catch(()=>null);
+const stamp=ms=>{const m=Math.floor(ms/60000),s=(ms%60000)/1000;return'['+String(m).padStart(2,'0')+':'+s.toFixed(3).padStart(6,'0')+']'};
+
+function ttime(s){
+s=(s||'').trim();
+if(!s)return NaN;
+if(/ms$/.test(s))return parseFloat(s);
+if(/s$/.test(s))return parseFloat(s)*1000;
+let v=0;
+for(const x of s.split(':'))v=v*60+parseFloat(x);
+return v*1000;
+}
+
+function ttml(x){
+const d=new DOMParser().parseFromString(x,'application/xml');
+const o=[];
+d.querySelectorAll('p').forEach(p=>{
+const t=ttime(p.getAttribute('begin'));
+if(!isNaN(t))o.push(stamp(t)+p.textContent.replace(/\s+/g,' ').trim());
+});
+return o.join('\n');
+}
 
 function pick(list,d){
 let best=null,bs=1e12;
 for(const x of list){
 if(x.instrumental)continue;
-const df=Math.abs((x.duration||0)*1000-d);
+const df=x.duration?Math.abs(x.duration*1000-d):4000;
 if(df>5000)continue;
 const sc=(x.syncedLyrics?0:1e6)+df;
 if(sc<bs){bs=sc;best=x}
@@ -218,21 +241,54 @@ if(sc<bs){bs=sc;best=x}
 return best;
 }
 
-async function getLyrics(t,sg){
-const J=u=>fetch(u,{signal:sg}).then(r=>r.ok?r.json():null).catch(()=>null);
-const g=J(LB+'get?'+new URLSearchParams({track_name:t.name,artist_name:t.artist,album_name:t.album,duration:Math.round(t.dur/1000)}));
-const s=J(LB+'search?'+new URLSearchParams({track_name:clean(t.name),artist_name:t.artist}));
-const a=await g;
-if(a&&a.syncedLyrics)return a;
-const l=await s;
-let b=l&&l.length?pick(l,t.dur):null;
-if(!b&&!a){
-const q=await J(LB+'search?'+new URLSearchParams({q:t.name+' '+t.artist}));
-b=q&&q.length?pick(q,t.dur):null;
+const lrcSrc=(base,name)=>async(t,sg)=>{
+const [a,l]=await Promise.all([
+J(base+'get?'+Q({track_name:t.name,artist_name:t.artist,album_name:t.album,duration:Math.round(t.dur/1000)}),sg),
+J(base+'search?'+Q({track_name:clean(t.name),artist_name:t.artist}),sg)
+]);
+const b=Array.isArray(l)&&l.length?pick(l,t.dur):null;
+const r=a&&a.syncedLyrics?a:b&&b.syncedLyrics?b:a||b;
+return r?{...r,src:name}:null;
+};
+
+async function srcAdi(t,sg){
+const p={track:t.name,artist:t.artist,duration:Math.round(t.dur/1000),prefer:'line'};
+if(t.album)p.album=t.album;
+if(t.isrc)p.isrc=t.isrc;
+const j=await J('https://lyrics.imreallyadi.space/api/lyrics?'+Q(p),sg);
+const r=j&&(j.lyrics||j.best);
+if(!r)return null;
+const o={...r,src:'adi'};
+if(!o.syncedLyrics&&o.ttml){try{o.syncedLyrics=ttml(o.ttml)}catch(e){}}
+return o;
 }
+
+function valid(r,t){
+if(!r)return null;
+if(r.instrumental)return r;
+if(r.duration&&Math.abs(r.duration*1000-t.dur)>6000)return null;
+if(r.syncedLyrics){
+const a=parse(r.syncedLyrics);
+if(!a.length||a[a.length-1].t>t.dur+5000)r={...r,syncedLyrics:null};
+}
+return r.syncedLyrics||r.plainLyrics?r:null;
+}
+
+const SRC=[lrcSrc('https://lrcmux.dev/api/','lrcmux'),srcAdi,lrcSrc('https://lrclib.net/api/','lrclib')];
+
+async function getLyrics(t,sg){
+const ps=SRC.map(f=>T(f(t,sg).catch(()=>null),4500).then(r=>valid(r,t)));
+let plain=null,inst=null;
+for(const p of ps){
+const r=await p;
 if(sg.aborted)return;
-if(b&&b.syncedLyrics)return b;
-return a||b||null;
+if(!r)continue;
+if(r.instrumental){inst=inst||r;continue}
+if(r.syncedLyrics){console.info('lyrics:',r.src);return r}
+if(!plain)plain=r;
+}
+if(plain)console.info('lyrics (plain):',plain.src);
+return plain||inst;
 }
 
 function parse(s){
