@@ -193,7 +193,7 @@ lyr.classList.remove('plain');
 if(it.type&&it.type!=='track')return;
 const c=cache.get(id);
 if(c!==undefined){show(c);return}
-const t={name:it.name,artist:names[0]||'',album:it.album?it.album.name:'',dur:it.duration_ms,isrc:(it.external_ids&&it.external_ids.isrc)||''};
+const t={name:it.name,artist:names[0]||'',artists:names.join(', '),album:it.album?it.album.name:'',dur:it.duration_ms,isrc:(it.external_ids&&it.external_ids.isrc)||''};
 ctl=new AbortController();
 getLyrics(t,ctl.signal).then(r=>{
 if(r===undefined)return;
@@ -251,6 +251,37 @@ const r=a&&a.syncedLyrics?a:b&&b.syncedLyrics?b:a||b;
 return r?{...r,src:name}:null;
 };
 
+async function srcBL(t,sg){
+const u=a=>'https://api.betterlyrics.org/getLyrics?'+Q({s:t.name,a,al:t.album,d:Math.round(t.dur/1000)});
+const as=t.artists&&t.artists!==t.artist?[t.artist,t.artists]:[t.artist];
+const js=await Promise.all(as.map(a=>J(u(a),sg)));
+for(const j of js){
+if(j&&j.ttml){
+let s='';
+try{s=ttml(j.ttml)}catch(e){}
+if(s)return{syncedLyrics:s,src:'betterlyrics'};
+}
+}
+return null;
+}
+
+async function srcUni(t,sg){
+const p=n=>{
+const o={song:n,artist:t.artist,duration:Math.round(t.dur/1000)};
+if(t.album)o.album=t.album;
+return'https://unison.boidu.dev/lyrics?'+Q(o);
+};
+let j=await J(p(t.name),sg);
+if(!(j&&j.success&&j.data&&j.data.lyrics)&&clean(t.name)!==t.name)j=await J(p(clean(t.name)),sg);
+const d=j&&j.success&&j.data;
+if(!d||!d.lyrics)return null;
+const o={duration:d.duration,src:'unison'};
+if(d.format==='ttml'){try{o.syncedLyrics=ttml(d.lyrics)}catch(e){}}
+else if(d.format==='lrc')o.syncedLyrics=d.lyrics;
+else o.plainLyrics=d.lyrics;
+return o;
+}
+
 async function srcAdi(t,sg){
 const p={track:t.name,artist:t.artist,duration:Math.round(t.dur/1000),prefer:'line'};
 if(t.album)p.album=t.album;
@@ -274,10 +305,10 @@ if(!a.length||a[a.length-1].t>t.dur+5000)r={...r,syncedLyrics:null};
 return r.syncedLyrics||r.plainLyrics?r:null;
 }
 
-const SRC=[lrcSrc('https://lrcmux.dev/api/','lrcmux'),srcAdi,lrcSrc('https://lrclib.net/api/','lrclib')];
+const SRC=[srcBL,srcUni,lrcSrc('https://lrcmux.dev/api/','lrcmux'),srcAdi,lrcSrc('https://lrclib.net/api/','lrclib')];
 
 async function getLyrics(t,sg){
-const ps=SRC.map(f=>T(f(t,sg).catch(()=>null),4500).then(r=>valid(r,t)));
+const ps=SRC.map(f=>T(f(t,sg).catch(()=>null),4000).then(r=>valid(r,t)));
 let plain=null,inst=null;
 for(const p of ps){
 const r=await p;
